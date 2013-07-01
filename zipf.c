@@ -66,7 +66,7 @@ struct urlrangepair ** createurlrangepair(struct urlprobpair** probabilities, in
 }
  
  //takes in a urlList and uses pmf to calculate the probability of a given url being selected under the zipf distribution
-struct urlprobpair ** calc_probs(char **urlList, int urlCount) {
+struct urlprobpair ** calc_probs(char **urlList, int alpha, int urlCount) {
 	int i; 
 	
 	struct urlprobpair **probabilities = malloc(urlCount * sizeof(struct urlprobpair *));
@@ -77,7 +77,7 @@ struct urlprobpair ** calc_probs(char **urlList, int urlCount) {
 		probabilities[i] =  malloc(sizeof(struct urlprobpair));
 		probabilities[i]-> url = urlList[i];
 
-		probabilities[i]-> prob =  pmf(rank, 1, urlCount);
+		probabilities[i]-> prob =  pmf(rank, alpha, urlCount);
 		
 
 	}
@@ -173,12 +173,12 @@ int searcharray(int randint, struct urlrangepair** ranges, int count) {
 }
 
 //generates random urls within the zipf distribution
-void runzipf(char * fileName, int samplesize) {
+void runzipf(char * fileName, int samplesize, int alpha) {
 	int totalurls = getLineCount(fileName); int i;int j; int k;
 
 
 	char** urlList = filetoarray(fileName);
-	struct urlprobpair ** probabilities = calc_probs(urlList, totalurls);
+	struct urlprobpair ** probabilities = calc_probs(urlList, alpha, totalurls);
 	struct urlrangepair ** ranges = createurlrangepair(probabilities, totalurls);
 	int countarray[totalurls];
 	srand(time(NULL));
@@ -186,7 +186,7 @@ void runzipf(char * fileName, int samplesize) {
 	char ch;
 
 	fp = fopen("results.txt", "w");
-	printf("%s", "file is open");
+	
 
 	for(i = 0; i<totalurls; i++) {
 		countarray[i] =0;
@@ -212,11 +212,9 @@ void runzipf(char * fileName, int samplesize) {
 
 int main (int argc, char** argv) {
 	char * fileName = argv[1];
-	int x = atoi(argv[2]);
-	int alpha = atoi(argv[3]);
-	int n = atoi(argv[4]);
-	int samplesize = atoi(argv[5]);
+	int alpha = atoi(argv[2]);
+	int samplesize = atoi(argv[3]);
 
 
-	runzipf(fileName, samplesize);
+	runzipf(fileName, samplesize, alpha);
 }
