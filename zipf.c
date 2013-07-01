@@ -62,6 +62,7 @@ struct urlrangepair ** createurlrangepair(struct urlprobpair** probabilities, in
 
 	}
 
+
 	return ranges;
 }
  
@@ -211,8 +212,16 @@ void runzipf(char * fileName, int samplesize, int alpha) {
 
 
 int main (int argc, char** argv) {
+	if (argv[1] == NULL || argv[2] == NULL || argv[3] == NULL){
+		printf("Please format your arguments in this format: ./zipf [filename] [alpha] [sample size] \n");
+		exit;
+	}
 	char * fileName = argv[1];
+
+
 	int alpha = atoi(argv[2]);
+
+
 	int samplesize = atoi(argv[3]);
 
 
