@@ -1,0 +1,16 @@
+
+granularity: each sample hit covers 4 byte(s) no time propagated
+
+                                  called/total       parents 
+index  %time    self descendents  called+self    name    	index
+                                  called/total       children
+
+
+
+granularity: each sample hit covers 4 byte(s) no time accumulated
+
+  %   cumulative   self              self     total           
+ time   seconds   seconds    calls  ms/call  ms/call  name    
+
+Index by function name
+

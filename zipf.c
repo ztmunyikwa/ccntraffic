@@ -199,7 +199,11 @@ void runzipf(char * fileName, int samplesize, int alpha) {
 		
 		result = ranges[searcharray(randint, ranges, totalurls)] -> url;
 		countarray[searcharray(randint, ranges, totalurls)] ++;
-		fputs(result, fp);
+		fprintf(fp, "%s/", result);
+
+		for (i = 0; i< countarray[searcharray(randint, ranges, totalurls)]; i++) {
+			fprintf(fp, "%d/", i);		
+		}
 		fputs("\n", fp);
 
 		printf("%s\n", result);
