@@ -261,6 +261,28 @@ struct urlprobpair ** calc_probs(char **urlList, int alpha, int urlCount) {
 
 }
 
+int searcharray(int randint, struct urlrangepair** ranges, int count) {
+	int low = 0;
+	int high = count -1;
+
+	int mid = 0;
+
+	while (low <= high) {
+		mid = ((high + low)/ 2);
+		if (ranges[mid]-> range[0] > randint) {
+			high = mid -1;
+		} else if(ranges[mid] -> range[1] < randint) {
+			low = mid + 1;
+		} else {
+			
+			return mid;
+
+		}
+	}
+	return 0;
+
+}
+
 
 //Taken from ....
 //Generate Zipf distributed random variables
@@ -311,45 +333,7 @@ int zipf(double alpha, int n, int k){
 	return(zipf_value);
 }
 
-void runzipf(char * fileName, int samplesize, int alpha) {
-	int totalurls = getLineCount(fileName); int i;int j; int k;
 
-
-	char** urlList = filetoarray(fileName);
-	struct urlprobpair ** probabilities = calc_probs(urlList, alpha, totalurls);
-	struct urlrangepair ** ranges = createurlrangepair(probabilities, totalurls);
-	int countarray[totalurls];
-	srand(time(NULL));
-	FILE *fp;
-	char ch;
-
-	fp = fopen("results.txt", "w");
-	
-
-	for(i = 0; i<totalurls; i++) {
-		countarray[i] =0;
-	}
-
-	for (j = 0; j< samplesize; j++) {
-		int randint = rand()%ranges[totalurls-1]->range[1];
-		char * result = malloc(sizeof(ranges[searcharray(randint, ranges, totalurls)] -> url));
-		
-		result = ranges[searcharray(randint, ranges, totalurls)] -> url;
-		countarray[searcharray(randint, ranges, totalurls)] ++;
-		fprintf(fp, "%s/", result);
-
-		for (i = 0; i< countarray[searcharray(randint, ranges, totalurls)]; i++) {
-			fprintf(fp, "%d/", i);		
-		}
-		fputs("\n", fp);
-
-		printf("%s\n", result);
-	}
-
-	for (k = 0; k<totalurls; k++) {
-		fprintf(fp, "Url: %s   Number of occurrences: %d  Percentage of sample: %f\n", ranges[k]-> url,countarray[k], 100.0*(countarray[k]/samplesize));
-	}
-}
 
 
 static void
@@ -381,9 +365,9 @@ ask_set(struct mydata *md, char ** urlList, int flying, int lineCount){
 
 			cl = &(md->ooo[i].closure);
 			name = ccn_charbuf_create();
-			int randint = rand()%ranges[totalurls-1] ->range[1];
-			char * result = malloc(sizeof(ranges[searcharray(randint, ranges, totalurls)] -> url));
-			result = ranges[searcharray(randint, ranges, totalurls)] ->url;
+			int randint = rand()%ranges[lineCount-1] ->range[1];
+			char * result = malloc(sizeof(ranges[searcharray(randint, ranges, lineCount)] -> url));
+			result = ranges[searcharray(randint, ranges, lineCount)] ->url;
 
 		
 			printf("url = %s \n", result);
