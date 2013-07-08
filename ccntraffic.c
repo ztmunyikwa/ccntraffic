@@ -45,8 +45,10 @@
 
 #define GOT_HERE() (void)((__LINE__))
 
-int DEBUG = 0;
-
+int DEBUG = 1;
+int *countarray;
+struct urlrangepair ** ranges;
+int totalUrls; 
 
 //Return the number of lines/URLs in a file
 int getLineCount(const char* fileName){
@@ -98,6 +100,17 @@ struct mydata {
 	struct ooodata *ooo;
 };
 
+struct urlprobpair 
+{
+	char *url;
+	double prob;
+}; 
+
+struct urlrangepair
+{
+	char *url;
+	int range[2];
+};
 
 static void
 usage(const char *progname)
@@ -175,6 +188,139 @@ double rand_val(int seed)
   return((double) x / m);
 }
 
+//calculates a modified harmonic series for the pmf of zipf
+double harmonic(int n, int alpha) {
+	double answer = 0;
+	double counter = 1;
+	while (counter <= n) 
+	{
+		
+		answer = answer + pow((1.0/counter), alpha);
+		
+		counter++;
+	}
+	return answer;
+}
+
+//returns a double, the probability of x occurring with a specified alpha, and n possible outcomes
+double pmf(int x, int alpha, int n) {
+	double answer;
+	
+	answer = 1.0/ (pow(x, alpha) * (harmonic(n, alpha)));
+	return answer;
+}
+
+int closestten(double n) {
+	return (int) pow(10, ceil(log10(n)));
+}
+
+
+//takes in the list of urls and calculates the range that each random uniform number would correspond to which urls
+struct urlrangepair ** createurlrangepair(struct urlprobpair** probabilities, int urlCount) {
+	int totalbuckets = closestten(1/ probabilities[urlCount-1] -> prob);
+	int low = 0;
+	int i;
+
+	struct urlrangepair **ranges = malloc(urlCount * sizeof(struct urlrangepair*));
+
+	for (i = 0; i<urlCount; i++) {
+		int numbaskets = (int) round(probabilities[i] -> prob * totalbuckets);
+		ranges[i] = malloc(sizeof(struct urlrangepair));
+		ranges[i] -> url = probabilities[i] -> url;
+		ranges[i] -> range[0] = low;
+		ranges[i] -> range[1] = low + numbaskets-1;
+
+		low = low + numbaskets;
+		//printf("%s  %d - %d \n", ranges[i] -> url, ranges[i] -> range[0], ranges[i] -> range[1]);
+
+	}
+
+
+	return ranges;
+}
+ 
+ //takes in a urlList and uses pmf to calculate the probability of a given url being selected under the zipf distribution
+struct urlprobpair ** calc_probs(char **urlList, int alpha, int urlCount) {
+	int i; 
+	
+	struct urlprobpair **probabilities = malloc(urlCount * sizeof(struct urlprobpair *));
+	
+
+	for (i = 0; i< urlCount; i++) {
+		int rank = i+1; 
+		probabilities[i] =  malloc(sizeof(struct urlprobpair));
+		probabilities[i]-> url = urlList[i];
+
+		probabilities[i]-> prob =  pmf(rank, alpha, urlCount);
+		
+
+	}
+	
+	return probabilities;
+	
+
+}
+
+
+char** filetoarray(const char *fileName) {
+	char ** urlList = NULL;
+	int lineCount = getLineCount(fileName);
+
+	printf("There are %d URLs in the file %s\n", lineCount, fileName);
+
+	urlList = malloc(lineCount * sizeof(char*));
+
+	char line[2000];
+
+	int idx = 0;
+	int lineIdx = 0; 
+
+	FILE *file = fopen(fileName, "r");
+	if (file == NULL) {
+		printf("Cannot open file %s, exiting...\n", fileName);
+		exit(-1);
+	}
+
+	while(fgets(line, sizeof line, file) != NULL) {
+		if(lineIdx >= 0 && lineIdx < lineCount){
+			urlList[idx] = malloc((strlen(line)) * sizeof(char));
+			strcpy(urlList[idx], line);	
+			urlList[idx][strlen(line)-1] = '\0';
+
+			idx++;
+		}
+		lineIdx;
+
+	}
+	
+
+	return urlList; 
+
+
+}
+int searcharray(int randint, struct urlrangepair** ranges, int count) {
+	int low = 0;
+	int high = count -1;
+
+	int mid = 0;
+
+	while (low <= high) {
+		mid = ((high + low)/ 2);
+		if (ranges[mid]-> range[0] > randint) {
+			high = mid -1;
+		} else if(ranges[mid] -> range[1] < randint) {
+			low = mid + 1;
+		} else {
+			
+			return mid;
+
+		}
+	}
+	return 0;
+
+}
+
+
 //Taken from ....
 //Generate Zipf distributed random variables
 //n decides 1 ... N
@@ -225,8 +371,10 @@ int zipf(double alpha, int n, int k){
 }
 
 
+
+
 static void
-ask_set(struct mydata *md, char ** urlList, int flying){
+ask_set(struct mydata *md, char ** urlList, int flying, int lineCount, char * urlFile){
 	if(DEBUG)
 		printf("In function askset \n ");
 	
@@ -245,6 +393,17 @@ ask_set(struct mydata *md, char ** urlList, int flying){
 	printf("Zipfs ends\n");
 */
 
+	totalUrls = lineCount;
+	char** allUrls = filetoarray(urlFile);
+	struct urlprobpair ** probabilities = calc_probs(allUrls, 1, lineCount); //hardcoded alpha = 1
+	ranges = createurlrangepair(probabilities, lineCount);
+	countarray = malloc(lineCount * sizeof(int));
+
+	//set all of count array to zeros 
+	for (i=0; i<lineCount;  i++) {
+		countarray[i] = 0; 
+	}
+
 	int r = 0;
 		
 	for(r = 0; r < 1; r++){
@@ -252,10 +411,16 @@ ask_set(struct mydata *md, char ** urlList, int flying){
 
 			cl = &(md->ooo[i].closure);
 			name = ccn_charbuf_create();
-		
-			printf("url = %s \n", urlList[i]);
+			int randint = rand()%ranges[lineCount-1] ->range[1];
+			int urlIndex = searcharray(randint, ranges, lineCount);
+			char * result = malloc(sizeof(ranges[urlIndex] -> url));
+			printf("randint = %d  searcharray = %d \n", randint, urlIndex);
+			result = ranges[urlIndex] ->url;
+			countarray[urlIndex] ++;
+			
+			printf("url = %s \n", result);
 			printf("===\n");
-			res = ccn_name_from_uri(name, urlList[i]);
+			res = ccn_name_from_uri(name, result);
 			if(res < 0){
 				printf("ccn_name_from_uri failed \n");
 				abort();
@@ -317,6 +482,7 @@ incoming_content(
     struct ccn_charbuf *name = NULL;
     struct ccn_charbuf *templ = NULL;
     struct ccn_charbuf *temp = NULL;
+    struct ccn_closure * cl = NULL;
     const unsigned char *ccnb = NULL;
     size_t ccnb_size = 0;
     const unsigned char *data = NULL;
@@ -326,7 +492,8 @@ incoming_content(
     struct ccn_indexbuf *ic = NULL;
     int res;
     struct mydata *md = selfp->data;
-    
+
+    //handler is about to be deregistered
     if (kind == CCN_UPCALL_FINAL) {
         if (md != NULL) {
             selfp->data = NULL;
@@ -335,6 +502,7 @@ incoming_content(
         }
         return(CCN_UPCALL_RESULT_OK);
     }
+
     if (kind == CCN_UPCALL_INTEREST_TIMED_OUT)
         return(CCN_UPCALL_RESULT_REEXPRESS);
     if (kind != CCN_UPCALL_CONTENT && kind != CCN_UPCALL_CONTENT_UNVERIFIED)
@@ -343,8 +511,9 @@ incoming_content(
         selfp->data = md = calloc(1, sizeof(*md));
     ccnb = info->content_ccnb;
     ccnb_size = info->pco->offset[CCN_PCO_E];
-    ib = info->interest_ccnb;
+    ib = info->interest_ccnb; 
     ic = info->interest_comps;
+
     /* XXX - must verify sig, and make sure it is LEAF content */
     res = ccn_content_get_value(ccnb, ccnb_size, info->pco, &data, &data_size);
     if (res < 0) abort();
@@ -368,17 +537,33 @@ incoming_content(
         exit(0);
     
     /* Ask for the next one */
+    //unclear how the following line works... I'm putting an arbitary i so it will compile.. awkward.
+    int i =2;
+    cl = &(md -> ooo[i].closure);
+
     name = ccn_charbuf_create();
-    ccn_name_init(name);
-    if (ic->n < 2) abort();
-    res = ccn_name_append_components(name, ib, ic->buf[0], ic->buf[ic->n - 2]);
-    if (res < 0) abort();
+    ccn_name_init(name); //reset charbuf to represent an empty name in binary format
+    //if (ic->n < 2) abort();
+    //res = ccn_name_append_components(name, ib, ic->buf[0], ic->buf[ic->n - 2]); //
+    int randint = rand()%ranges[totalUrls-1] ->range[1];
+    int urlIndex = searcharray(randint, ranges, totalUrls);
+    char * result = malloc(sizeof(ranges[urlIndex] -> url));
+    result = ranges[urlIndex] ->url;
+    countarray[urlIndex] ++;
+
+    res = ccn_name_from_uri(name, result);
+    if (res < 0) {
+    	printf("ccn_name_from_uri failed \n");
+    	abort();
+    } 
     temp = ccn_charbuf_create();
 	//printf("intdata = %d \n ", selfp->intdata);
-    ccn_charbuf_putf(temp, "%d", ++(selfp->intdata));
-    ccn_name_append(name, temp->buf, temp->length);
+    ccn_charbuf_putf(temp, "%d", countarray[urlIndex]); // we need to append the count here....
+    ccn_name_append(name, temp->buf, temp->length); //add a component to a name, compoenent is arbitrary string of n octects
     ccn_charbuf_destroy(&temp);
 	
+
+
 	if(DEBUG){
 		//Print out the interest's name
 		printf("Interest name = ");
@@ -405,9 +590,13 @@ incoming_content(
 		printf("\n");
 	}
 	
+
+	
     templ = make_template(md);
 
-    res = ccn_express_interest(info->h, name, selfp, templ);
+    //ccnexpresssinterest(struct ccn*  struct ccn_charbuf *namebuf, struct ccn_closure *action, struct ccn_charbuf *interest_template);)
+    //res = ccn_express_interest(info->h, name, selfp, templ);
+    res = ccn_express_interest(md -> h, name, cl, templ);
     if (res < 0) abort();
     
     ccn_charbuf_destroy(&templ);
@@ -465,11 +654,12 @@ int main(int argc, char** argv){
         }
     }
 
+
 	//Initialize the URL list	
 	char ** urlList = NULL;
 
 	int lineCount = getLineCount(urlFile);
-	// printf("There are %d URLs in the file %s\n", lineCount, urlFile);
+	printf("There are %d URLs in the file %s\n", lineCount, urlFile);
 	
 	if(flying == -1)
 		flying = lineCount; //By default, all the URLs in the urlFile will be queried
@@ -526,14 +716,16 @@ int main(int argc, char** argv){
     }
 
 	//Build and send out a group of interests
-	ask_set(mydata, urlList, flying);
+	ask_set(mydata, urlList, flying, lineCount, urlFile);
 	
 	/* Run a little while to see if there is anything there*/
 	res = ccn_run(ccn, 500);
+	printf("%d", res);
 	
     /* We got something, run until end of data or somebody kills us */
     while (res >= 0) {
         micros = 50000000;
+        printf("%d", res);
         res = ccn_run(ccn, micros / 1000);
     }
 	
