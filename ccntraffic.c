@@ -46,6 +46,7 @@
 #define GOT_HERE() (void)((__LINE__))
 
 int DEBUG = 1;
+int intereststosend;
 int *countarray;
 struct urlrangepair ** ranges;
 int totalUrls; 
@@ -121,6 +122,7 @@ usage(const char *progname)
 			"	ccndelphi program is preferred to be used as the NDN server\n"
             "   -f - specify the location of the URI file\n"
             "   -n - specify the number of concurrent interests, i.e., the number of queried URIs, default value = 100\n"
+	    "   -i - specify the number of total interests sent before program termination\n"
             "   -s - specify the starting point of the requested interest. Default value = 0. With the support of this option, multiple machines can share the same URI file but query differet portion of the URIs\n",
             progname);
     exit(1);
@@ -232,8 +234,7 @@ struct urlrangepair ** createurlrangepair(struct urlprobpair** probabilities, in
 		ranges[i] -> range[1] = low + numbaskets-1;
 
 		low = low + numbaskets;
-		//printf("%s  %d - %d \n", ranges[i] -> url, ranges[i] -> range[0], ranges[i] -> range[1]);
-
+		
 	}
 
 
@@ -256,7 +257,7 @@ struct urlprobpair ** calc_probs(char **urlList, int alpha, int urlCount) {
 		
 
 	}
-	
+
 	return probabilities;
 	
 
@@ -271,6 +272,8 @@ char** filetoarray(const char *fileName) {
 
 	urlList = malloc(lineCount * sizeof(char*));
 
+		
+
 	char line[2000];
 
 	int idx = 0;
@@ -282,19 +285,20 @@ char** filetoarray(const char *fileName) {
 		exit(-1);
 	}
 
+	
 	while(fgets(line, sizeof line, file) != NULL) {
 		if(lineIdx >= 0 && lineIdx < lineCount){
-		urlList[idx] = malloc((strlen(line)) * sizeof(char));
+			urlList[idx] = malloc((strlen(line)+1) * sizeof(char));
 			strcpy(urlList[idx], line);	
 			urlList[idx][strlen(line)-1] = '\0';
 
 			idx++;
 		}
-		lineIdx;
-
+		lineIdx++;
+	
 	}
 	
-
+	
 	return urlList; 
 
 
@@ -412,7 +416,7 @@ ask_set(struct mydata *md, char ** urlList, int flying, int lineCount, char * ur
 		
 	for(r = 0; r < 1; r++){
 		for(i = 0; i < flying; i++){
-
+			
 			cl = &(md->ooo[i].closure);
 			name = ccn_charbuf_create();
 			int randint = rand()%ranges[lineCount-1] ->range[1];
@@ -471,6 +475,8 @@ ask_set(struct mydata *md, char ** urlList, int flying, int lineCount, char * ur
 			
 
 			res = ccn_express_interest(md->h, name, cl, templ);
+			intereststosend = intereststosend -1;
+			if (intereststosend < 0) exit(0);
 			if(res < 0) abort();
 		
 			ccn_charbuf_destroy(&name);
@@ -544,12 +550,16 @@ incoming_content(
     
     /* A short block signals EOF for us. */
     if (data_size < CHUNK_SIZE)
-        exit(0);
-    
-    /* Ask for the next one */
-    //unclear how the following line works... I'm putting an arbitary i so it will compile.. awkward.
-    int i =2;
-    cl = &(md -> ooo[i].closure);
+    exit(0);
+    if (intereststosend <= 0) exit(0);
+
+    intereststosend = intereststosend -1;
+
+
+/* Ask for the next one */
+
+int i =2;
+cl = &(md -> ooo[i].closure);
 
     name = ccn_charbuf_create();
     ccn_name_init(name); //reset charbuf to represent an empty name in binary format
@@ -557,18 +567,19 @@ incoming_content(
     //res = ccn_name_append_components(name, ib, ic->buf[0], ic->buf[ic->n - 2]); //
     int randint = rand()%ranges[totalUrls-1] ->range[1];
     int urlIndex = searcharray(randint, ranges, totalUrls);
-    char * result = malloc(sizeof(ranges[urlIndex] -> url));
-    result = ranges[urlIndex] ->url;
+    char * result = ranges[urlIndex] ->url;
     countarray[urlIndex] ++;
 
- FILE *fp; int k;
+    FILE *fp; int k;
     fp = fopen("results.txt", "w+");
     for (k = 0; k<totalUrls; k++) {
        fprintf(fp, "%d;%d \n",k, countarray[k]);
     }
     fflush(fp);
+	fclose(fp);
   	
-    res = ccn_name_from_uri(name, result);
+    res = ccn_name_from_uri(name, result); 
+   
     if (res < 0) {
     	printf("ccn_name_from_uri failed \n");
     	abort();
@@ -584,7 +595,7 @@ incoming_content(
 	if(DEBUG){
 		//Print out the interest's name
 		printf("Interest name = ");
-		
+		printf("We have sent %d interests so far", intereststosend);
 		int myres = 0;
 		struct ccn_indexbuf* ndx = ccn_indexbuf_create();
 		unsigned char* mycomp = NULL;
@@ -645,7 +656,7 @@ int main(int argc, char** argv){
 	char* urlFile = NULL;
 		
 	//By default, we will send all the urls listed in the file starting from position 0
-	while ((ch = getopt(argc, argv, "n:s:f:hd")) != -1) {
+	while ((ch = getopt(argc, argv, "n:s:f:i:hd")) != -1) {
         switch (ch) {
             case 'f':
 				urlFile = optarg;
@@ -655,7 +666,12 @@ int main(int argc, char** argv){
 				start = atoi(optarg);
 				//printf("start = %d \n", start);
 				break;
-            case 'n':
+            case 'i':
+		intereststosend = atoi(optarg);
+		printf("please send %d interests in total.",intereststosend);
+		break;
+		
+		case 'n':
                 res = atoi(optarg);
                 if (1 <= res)
                 flying = res;
@@ -684,33 +700,13 @@ int main(int argc, char** argv){
 
 	urlList = malloc(lineCount * sizeof(char*));
 
+	printf("CP2\n");
+
 	char line[2000];
 
 	int idx = 0;
 	int lineIdx = 0;
 
-	FILE *file = fopen(urlFile, "r");
-	if(file == NULL){
-		printf("Cannot open file %s, exiting...\n", urlFile);
-		exit(-1);
-	}
-
-	while(fgets(line, sizeof line, file) != NULL){	/* read a line */
-		if(lineIdx >= start && lineIdx < lineCount){
-			urlList[idx] = malloc((strlen(line)) * sizeof(char));
-			strcpy(urlList[idx], line);	
-			urlList[idx][strlen(line)-1] = '\0';
-
-		//	if(DEBUG){
-		//		printf("URL %d = %s \n", idx, line);
-		//		printf("URL length = %d \n", strlen(line));
-		//	}
-				
-			idx++;
-		}
-		lineIdx++;
-	}
-	
 
 	ccn = ccn_create();
     if (ccn_connect(ccn, NULL) == -1) {
@@ -756,7 +752,4 @@ int main(int argc, char** argv){
 	ccn_destroy(&ccn);
     exit(res < 0);
 }
-
-
-
 
