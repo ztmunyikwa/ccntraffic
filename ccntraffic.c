@@ -282,17 +282,17 @@ char** filetoarray(const char *fileName) {
 		exit(-1);
 	}
 
-//	while(fgets(line, sizeof line, file) != NULL) {
-	//	if(lineIdx >= 0 && lineIdx < lineCount){
-	//		urlList[idx] = malloc((strlen(line)) * sizeof(char));
-	//		strcpy(urlList[idx], line);	
-	//		urlList[idx][strlen(line)-1] = '\0';
+	while(fgets(line, sizeof line, file) != NULL) {
+		if(lineIdx >= 0 && lineIdx < lineCount){
+		urlList[idx] = malloc((strlen(line)) * sizeof(char));
+			strcpy(urlList[idx], line);	
+			urlList[idx][strlen(line)-1] = '\0';
 
-	//		idx++;
-	//	}
-	//	lineIdx;
+			idx++;
+		}
+		lineIdx;
 
-	//}
+	}
 	
 
 	return urlList; 
@@ -396,10 +396,11 @@ ask_set(struct mydata *md, char ** urlList, int flying, int lineCount, char * ur
 
 	totalUrls = lineCount;
 	char** allUrls = filetoarray(urlFile);
+	
 	struct urlprobpair ** probabilities = calc_probs(allUrls, 1, lineCount); //hardcoded alpha = 1
 	free(allUrls);
 	ranges = createurlrangepair(probabilities, lineCount);
-	//free(probabilities);
+	free(probabilities);
 	countarray = malloc(lineCount * sizeof(int));
 
 	//set all of count array to zeros 
@@ -560,6 +561,13 @@ incoming_content(
     result = ranges[urlIndex] ->url;
     countarray[urlIndex] ++;
 
+ FILE *fp; int k;
+    fp = fopen("results.txt", "w+");
+    for (k = 0; k<totalUrls; k++) {
+       fprintf(fp, "%d;%d \n",k, countarray[k]);
+    }
+    fflush(fp);
+  	
     res = ccn_name_from_uri(name, result);
     if (res < 0) {
     	printf("ccn_name_from_uri failed \n");
@@ -605,7 +613,8 @@ incoming_content(
 
     //ccnexpresssinterest(struct ccn*  struct ccn_charbuf *namebuf, struct ccn_closure *action, struct ccn_charbuf *interest_template);)
     //res = ccn_express_interest(info->h, name, selfp, templ);
-    res = ccn_express_interest(info -> h, name, cl, templ);
+    res = ccn_express_interest(info -> h, name, selfp, templ);
+   
     if (res < 0) abort();
     
     ccn_charbuf_destroy(&templ);
@@ -692,10 +701,10 @@ int main(int argc, char** argv){
 			strcpy(urlList[idx], line);	
 			urlList[idx][strlen(line)-1] = '\0';
 
-			if(DEBUG){
-				printf("URL %d = %s \n", idx, line);
-				printf("URL length = %d \n", strlen(line));
-			}
+		//	if(DEBUG){
+		//		printf("URL %d = %s \n", idx, line);
+		//		printf("URL length = %d \n", strlen(line));
+		//	}
 				
 			idx++;
 		}
