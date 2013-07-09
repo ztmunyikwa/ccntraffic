@@ -48,6 +48,7 @@
 int DEBUG = 1;
 int intereststosend;
 int *countarray;
+char * distribution;
 struct urlrangepair ** ranges;
 int totalUrls; 
 
@@ -252,7 +253,6 @@ struct urlprobpair ** calc_probs(char **urlList, int alpha, int urlCount) {
 		int rank = i+1; 
 		probabilities[i] =  malloc(sizeof(struct urlprobpair));
 		probabilities[i]-> url = urlList[i];
-		printf("%s", probabilities[i] -> url);
 		probabilities[i]-> prob =  pmf(rank, alpha, urlCount);
 		
 
@@ -281,7 +281,7 @@ char** filetoarray(const char *fileName) {
 
 	FILE *file = fopen(fileName, "r");
 	if (file == NULL) {
-		printf("Cannot open file %s, exiting...\n", fileName);
+		printf("In filetoarray, cannot open file %s, exiting...\n", fileName);
 		exit(-1);
 	}
 
@@ -324,6 +324,20 @@ int searcharray(int randint, struct urlrangepair** ranges, int count) {
 	return 0;
 
 }
+
+void zipfinit(char *urlFile){
+	int i;
+        char** allUrls = filetoarray(urlFile);
+	struct urlprobpair ** probabilities = calc_probs(allUrls, 1, totalUrls); 
+	free(allUrls);
+	ranges = createurlrangepair(probabilities, totalUrls);
+        countarray = malloc(totalUrls * sizeof(int));
+	
+	for (i=0; i<totalUrls; i++) {
+            countarray[i] =0;
+        }
+	
+} 
 
 
 //Taken from ....
@@ -375,11 +389,20 @@ int zipf(double alpha, int n, int k){
 	return(zipf_value);
 }
 
+int zipfrand(int lineCount) {
+        int randint = rand()%ranges[lineCount - 1] -> range[1];
+	int urlIndex = searcharray(randint, ranges, lineCount);
+	
+ 	countarray[urlIndex] ++;
+   	return urlIndex;
+	
+}
+
 
 
 
 static void
-ask_set(struct mydata *md, char ** urlList, int flying, int lineCount, char * urlFile){
+ask_set(struct mydata *md, int flying, int lineCount, char * urlFile){
 	if(DEBUG)
 		printf("In function askset \n ");
 	
@@ -399,19 +422,7 @@ ask_set(struct mydata *md, char ** urlList, int flying, int lineCount, char * ur
 */
 
 	totalUrls = lineCount;
-	char** allUrls = filetoarray(urlFile);
-	
-	struct urlprobpair ** probabilities = calc_probs(allUrls, 1, lineCount); //hardcoded alpha = 1
-	free(allUrls);
-	ranges = createurlrangepair(probabilities, lineCount);
-	free(probabilities);
-	countarray = malloc(lineCount * sizeof(int));
-
-	//set all of count array to zeros 
-	for (i=0; i<lineCount;  i++) {
-		countarray[i] = 0; 
-	}
-
+	zipfinit(urlFile);
 	int r = 0;
 		
 	for(r = 0; r < 1; r++){
@@ -419,13 +430,8 @@ ask_set(struct mydata *md, char ** urlList, int flying, int lineCount, char * ur
 			
 			cl = &(md->ooo[i].closure);
 			name = ccn_charbuf_create();
-			int randint = rand()%ranges[lineCount-1] ->range[1];
-			int urlIndex = searcharray(randint, ranges, lineCount);
-			char * result = malloc(sizeof(ranges[urlIndex] -> url));
-			printf("randint = %d  searcharray = %d \n", randint, urlIndex);
-			printf("range = %d - %d", ranges[urlIndex] -> range[0], ranges[urlIndex] -> range[1]);
-			result = ranges[urlIndex] ->url;
-			countarray[urlIndex] ++;
+			int urlIndex = zipfrand(lineCount);
+			char* result = ranges[urlIndex] -> url;
 			
 			printf("url = %s \n", result);
 			printf("===\n");
@@ -565,10 +571,9 @@ cl = &(md -> ooo[i].closure);
     ccn_name_init(name); //reset charbuf to represent an empty name in binary format
     //if (ic->n < 2) abort();
     //res = ccn_name_append_components(name, ib, ic->buf[0], ic->buf[ic->n - 2]); //
-    int randint = rand()%ranges[totalUrls-1] ->range[1];
-    int urlIndex = searcharray(randint, ranges, totalUrls);
-    char * result = ranges[urlIndex] ->url;
-    countarray[urlIndex] ++;
+    int urlIndex = zipfrand(totalUrls);
+    char * result = ranges[urlIndex]-> url;
+    
 
     FILE *fp; int k;
     fp = fopen("results.txt", "w+");
@@ -595,7 +600,7 @@ cl = &(md -> ooo[i].closure);
 	if(DEBUG){
 		//Print out the interest's name
 		printf("Interest name = ");
-		printf("We have sent %d interests so far", intereststosend);
+		printf("We have %d interests left to send\n", intereststosend);
 		int myres = 0;
 		struct ccn_indexbuf* ndx = ccn_indexbuf_create();
 		unsigned char* mycomp = NULL;
@@ -656,7 +661,7 @@ int main(int argc, char** argv){
 	char* urlFile = NULL;
 		
 	//By default, we will send all the urls listed in the file starting from position 0
-	while ((ch = getopt(argc, argv, "n:s:f:i:hd")) != -1) {
+	while ((ch = getopt(argc, argv, "n:s:f:i:z:hd")) != -1) {
         switch (ch) {
             case 'f':
 				urlFile = optarg;
@@ -670,7 +675,11 @@ int main(int argc, char** argv){
 		intereststosend = atoi(optarg);
 		printf("please send %d interests in total.",intereststosend);
 		break;
-		
+		case 'z':
+			if(optarg == "zipf") printf("Using zipf distribution");
+			if(optarg == "uniform") printf("Using uniform distribution");
+			distribution = optarg;
+			break;
 		case 'n':
                 res = atoi(optarg);
                 if (1 <= res)
@@ -689,16 +698,13 @@ int main(int argc, char** argv){
     }
 
 
-	//Initialize the URL list	
-	char ** urlList = NULL;
+
 
 	int lineCount = getLineCount(urlFile);
 	printf("There are %d URLs in the file %s\n", lineCount, urlFile);
 	
 	if(flying == -1)
 		flying = lineCount; //By default, all the URLs in the urlFile will be queried
-
-	urlList = malloc(lineCount * sizeof(char*));
 
 	printf("CP2\n");
 
@@ -728,9 +734,9 @@ int main(int argc, char** argv){
         incoming->data = mydata;
         incoming->intdata = -1;
     }
-
+	
 	//Build and send out a group of interests
-	ask_set(mydata, urlList, flying, lineCount, urlFile);
+	ask_set(mydata, flying, lineCount, urlFile);
 	
 	/* Run a little while to see if there is anything there*/
 	res = ccn_run(ccn, 500);
