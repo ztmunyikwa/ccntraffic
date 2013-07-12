@@ -35,7 +35,6 @@
 #include <time.h>
 #include <unistd.h>
 #include <math.h>
-#include <regex.h>
 #include <ccn/ccn.h>
 #include <ccn/charbuf.h>
 #include <ccn/schedule.h>
@@ -49,7 +48,7 @@ int DEBUG = 1;
 int intereststosend;
 int *packetssent;
 int *packetsreceived;
-char * distribution;
+char * distribution = 1;
 struct urlrangepair ** ranges;
 int totalUrls; 
 
@@ -353,13 +352,10 @@ int findurlIndex(char * randurl, struct urlrangepair** ranges, int count) {
 	int urlIndex = -1; 
 	int i;
 	for (i = 0; i < count; i++) {
-		char* prefix = "ccnx:/";
 		
 		if (strncmp(ranges[i] -> url+6, randurl, 100) == 0 ) { 
 			urlIndex = i;
 			return urlIndex; 
-		}else {	
-			printf("%s does not equal %s\n", ranges[i]-> url+6, randurl);
 		}
 		 
 	} 
@@ -476,15 +472,21 @@ ask_set(struct mydata *md, int flying, int lineCount, char * urlFile){
 			cl = &(md->ooo[i].closure);
 			name = ccn_charbuf_create();
 			char * result; int num;
-			if (distribution == 1) { //uniform
+			if (distribution == 1) { //limited uniform
 				result = filetoarray(urlFile)[i];
-				num = packetssent[i]; 
+				num = packetssent[i];
+				packetssent[i]++; 
 			} else if (distribution == 2) { //zipf
 				int urlIndex = zipfrand(lineCount);
 				
 				num = packetssent[urlIndex];
 				result = ranges[urlIndex] -> url;
-			}
+			} else if (distribution == 3) { //uniform
+				int urlIndex = rand()%totalUrls;
+				num = ranges[urlIndex] -> url;
+				result = ranges[urlIndex] -> url;
+				packetssent[i]++;
+			}	
 			
 			
 			printf("url = %s \n", result);
@@ -623,7 +625,6 @@ incoming_content(
    char * receivedurl = mycomp;
    int receivurlidx = findurlIndex(receivedurl, ranges, totalUrls);
    printf("incoming interest name: %s", receivedurl);
-   printf("->the urlindex of this is %d\n", receivurlidx);
    packetsreceived[receivurlidx]++;
    
     
@@ -646,20 +647,23 @@ incoming_content(
 
 /* Ask for the next one */
 
-int i =2;
-cl = &(md -> ooo[i].closure);
+    int i =2;
+    cl = &(md -> ooo[i].closure);
 
     name = ccn_charbuf_create();
     ccn_name_init(name); //reset charbuf to represent an empty name in binary format
 
-    if(distribution ==1){ //uniform
+    if(distribution ==1){ //limited uniform
+	packetssent[receivurlidx]++;
 	if (ic->n < 2) abort();
 	res = ccn_name_append_components(name, ib, ic->buf[0], ic->buf[ic->n - 2]); 
 	if (res < 0) abort();
 	temp = ccn_charbuf_create();
-	ccn_charbuf_putf(temp, "%d", ++(selfp->intdata));
+	ccn_charbuf_putf(temp, "%d", packetssent[receivurlidx]);
 	ccn_name_append(name, temp->buf, temp->length);
 	ccn_charbuf_destroy(&temp);
+
+
     } else if (distribution == 2) { //zipf
 	int urlIndex = zipfrand(totalUrls);
         char * result = ranges[urlIndex]-> url;
@@ -677,16 +681,30 @@ cl = &(md -> ooo[i].closure);
     	ccn_name_append(name, temp->buf, temp->length); //add a component to a name, compoenent is arbitrary string of n octects
    	ccn_charbuf_destroy(&temp);
 
-    }
 
-  
-    
-  	
+
+
+    } else if (distribution == 3) { //uniform 
+	int urlIndex = rand()%totalUrls;
+	packetssent[urlIndex]++;
+
+
+	char * result = ranges[urlIndex] -> url;
+	res = ccn_name_from_uri(name, result); 
+	if (res < 0) {
+		printf("ccn_name_from_uri failed \n");
+		abort();
+	}
+	
+	temp = ccn_charbuf_create();
+	ccn_charbuf_putf(temp, "%d", packetssent[urlIndex]);
+	ccn_name_append(name, temp-> buf, temp -> length);
+	ccn_charbuf_destroy(&temp);
+	}	
  
 
 	if(DEBUG){
 		//Print out the interest's name
-		printf("Interest name = ");
 		printf("We have %d interests left to send\n", intereststosend);
 		int myres = 0;
 		struct ccn_indexbuf* ndx = ccn_indexbuf_create();
@@ -700,6 +718,7 @@ cl = &(md -> ooo[i].closure);
 		}
 		
 		int it = 0;
+		printf("Interest name =");
 		for(it = 0; it < ndx->n-1; it++){
 			mysize = 0;
 			myres = ccn_name_comp_get(name->buf, ndx, it, &mycomp, &mysize);
@@ -759,12 +778,13 @@ int main(int argc, char** argv){
 				break;
             case 'i':
 		intereststosend = atoi(optarg);
-		printf("please send %d interests in total.",intereststosend);
+		printf("Will send %d interests in total.",intereststosend);
 		break;
 		case 'z':
 			distribution = atoi(optarg);
-			if(distribution == 1) printf("Using uniform distribution");
-			if(distribution == 2) printf("Using zipf distribution");
+			if(distribution == 1) printf("Using limited uniform distribution...\n");
+			if(distribution == 2) printf("Using zipf distribution...\n");
+			if(distribution == 3) printf("Using uniform distribution... \n");
 			
 			break;
 		case 'n':
@@ -793,8 +813,7 @@ int main(int argc, char** argv){
 	if(flying == -1)
 		flying = lineCount; //By default, all the URLs in the urlFile will be queried
 
-	printf("CP2\n");
-
+	
 	char line[2000];
 
 	int idx = 0;
@@ -822,20 +841,11 @@ int main(int argc, char** argv){
         incoming->intdata = -1;
     }
 	//initialize counter arrays
-        printf("CP11");
+        
 	packetssent = malloc(lineCount * sizeof(int));
 	packetsreceived = malloc(lineCount *sizeof(int));
-	printf("CP17");
-
-	for (i=0; i<lineCount; i++) {
-		printf("initializepackets i= %d", i);
-        	packetssent[i] = 0;
-	    	packetsreceived[i] = 0; 
-        }
 	
-	for (i =0; i < lineCount; i++) {
-		printf("%d-%d", packetssent[i], packetsreceived[i]);
-	} 	
+	
 	//Build and send out a group of interests
 	ask_set(mydata, flying, lineCount, urlFile);
 	
