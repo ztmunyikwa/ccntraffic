@@ -39,6 +39,7 @@
 #include <ccn/charbuf.h>
 #include <ccn/schedule.h>
 #include <ccn/uri.h>
+#include <time.h> 
 
 #define PIPELIMIT 10000
 
@@ -51,6 +52,7 @@ int *packetsreceived;
 char * distribution = 1;
 struct urlrangepair ** ranges;
 int totalUrls; 
+clock_t begin, end;
 
 //Return the number of lines/URLs in a file
 int getLineCount(const char* fileName){
@@ -457,16 +459,18 @@ ask_set(struct mydata *md, int flying, int lineCount, char * urlFile){
 	}
 	printf("Zipfs ends\n");
 */
-	printf("CP6");	
+	
 	totalUrls = lineCount;
 	
-	printf("packets initialized");		
+		
 	zipfinit(urlFile);
 	
-	printf("CP9");
+	
+	
 	int r = 0;
 		
 	for(r = 0; r < 1; r++){
+		begin = clock();
 		for(i = 0; i < flying; i++){
 			
 			cl = &(md->ooo[i].closure);
@@ -632,20 +636,26 @@ incoming_content(
     /* A short block signals EOF for us. */
     if (data_size < CHUNK_SIZE)
     exit(0);
+
+    /* Exit program if we have sent all of the required interests. */
     if (intereststosend <= 0) {
 	FILE *fp; int k;
-    	fp = fopen("results.txt", "w+");
+	end = clock();
+	double time_spent = (double)(end - begin) / CLOCKS_PER_SEC; 
+	fp = fopen("results.txt", "w+");
+	fprintf(fp, "Sending and receiving the following packets took %d seconds of CPU time.\n", time_spent);
     	for (k = 0; k<totalUrls; k++) {
        		fprintf(fp, "%d;%d-%d \n",k, packetssent[k], packetsreceived[k]);
     	}
     	fflush(fp);
-	fclose(fp);	
+	fclose(fp);
+		
 	exit(0);
     }
     intereststosend = intereststosend -1;
 
 
-/* Ask for the next one */
+    /* Ask for the next one */	
 
     int i =2;
     cl = &(md -> ooo[i].closure);
